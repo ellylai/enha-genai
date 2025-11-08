@@ -1,0 +1,1 @@
+AI-powered playlist cover generator that creates a playlist cover based on a mix of the vibes of the playlist and the user's preferences.
