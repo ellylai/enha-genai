@@ -1,8 +1,8 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import PropTypes from "prop-types";
 
-const MIN_WEIGHT = 0.5;
-const MAX_WEIGHT = 1.8;
+const MIN_WEIGHT = 0.0;
+const MAX_WEIGHT = 1.0;
 const WEIGHT_STEP = 0.2;
 const CENTER_PULL = 0.011;
 const DAMPING = 0.94;
@@ -108,7 +108,7 @@ function Bubble({
         <>
           {/* --- Standard Display --- */}
           <span
-            className="px-6 text-lg font-medium capitalize tracking-wide pointer-events-none" // <-- No click handler, pointer-events-none
+            className="px-6 text-lg font-medium lowercase tracking-wide pointer-events-none" // <-- No click handler, pointer-events-none
           >
             {node.label}
           </span>

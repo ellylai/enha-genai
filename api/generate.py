@@ -83,7 +83,7 @@ def get_playlist_vibes(track_list_string: str) -> dict:
         Analyze its core 'vibe' and return a JSON object with the following structure:
         {
             "lighting": ["<description>"],
-            "time of day": ["<description>"],
+            "time": ["<description>"],
             "mood": {
                 "<mood_1>": <weight>,
                 "<mood_2>": <weight>,
@@ -105,7 +105,7 @@ def get_playlist_vibes(track_list_string: str) -> dict:
         - All keys are required.
         - Weights should be from 0 to 1.0, representing presence or importance.
         - Provide 3 items each for "mood", "colors", and "objects". Each should be a short phrase or single word.
-        - "lighting" and "time of day" should be lists containing a single or multiple phrases.
+        - "lighting" and "time" should be lists containing a single or multiple phrases.
         - "style" should be a single descriptive string, such as "blurry film photo taken in passing".
 
         Return ONLY the valid JSON object and nothing else.
@@ -180,13 +180,13 @@ def get_imagegen_prompt(user_prompt_2: dict) -> str:
     return final_prompt_text.strip()
 
 
-def generate_image(vibe_prompt: str, n_images=3):
+def generate_image(vibe_prompt: str):
     """
     Calls OpenRouter (Nano Banana / Gemini 2.5) to generate an image.
     Returns a string that can be used directly in <img src="">.
     It handles both Base64 and URL responses.
     """
-    return get_dummy_images()
+    # return get_dummy_images()
     print(f"--- Calling OpenRouter (Nano Banana) with prompt: {vibe_prompt[:50]}...")
 
     openrouter_headers = {
@@ -199,7 +199,7 @@ def generate_image(vibe_prompt: str, n_images=3):
     payload = {
         "model": "google/gemini-2.5-flash-image",
         "messages": [{"role": "user", "content": vibe_prompt}],
-        "generationConfig": {"responseModalities": ["IMAGE"], "numOutputs": n_images},
+        "generationConfig": {"responseModalities": ["IMAGE"]},
     }
 
     try:
@@ -212,13 +212,13 @@ def generate_image(vibe_prompt: str, n_images=3):
         for choice in result.get("choices", []):
             message = choice.get("message", {})
             images = message.get("images", [])
+            print("num images:", len(images))
 
             for img in images:
-
                 # --- Check for Base64 or URL ---
                 if "b64_json" in img:
                     b64_data = img["b64_json"]
-                    return f"data:image/png;base64,{b64_data}"
+                    image_data = f"data:image/png;base64,{b64_data}"
 
                 elif "image_url" in img:
                     img_url = img["image_url"]
@@ -249,12 +249,9 @@ def generate_image(vibe_prompt: str, n_images=3):
     except Exception as e:
         print(f"--- [ERROR] Image generation failed: {e}")
         return get_dummy_images()
-    
-    images_return = images_out[:n_images]
-    print("--- [DEBUG]")
-    for image in images_return:
-        print(image[:100])
-    return images_return
+
+    image_return = images_out[0]
+    return image_return
 
 
 def get_dummy_images():
@@ -304,7 +301,7 @@ def handler():
             token = get_spotify_token()
             details = get_playlist_details(playlist_id, token)
             naive_vibe_prompt = get_playlist_vibes(details)
-            
+
             print(f"--- [DEBUG] naiveVibePrompt: \n{naive_vibe_prompt}")
 
             # send naive_vibe_prompt to the frontend so the user can update it
@@ -317,10 +314,14 @@ def handler():
             if not updated_vibe_prompt:
                 return jsonify({"error": "No updatedVibePrompt provided."}), 400
             print(f"--- [DEBUG] updatedVibePrompt: \n{updated_vibe_prompt}")
-            imagegen_prompt = get_imagegen_prompt(updated_vibe_prompt)
-            image_data = generate_image(imagegen_prompt) # This returns a list of base64 strings
-            print(f"--- [DEBUG] Returning {len(image_data)} images", flush=True)
-            return jsonify({"base64Images": image_data})
+            images = []
+            for i in range(3):
+                imagegen_prompt = get_imagegen_prompt(updated_vibe_prompt)
+                image_data = generate_image(
+                    imagegen_prompt
+                )  # This returns a list of base64 strings
+                images.append(image_data)
+            return jsonify({"base64Images": images[:3]})
 
     except requests.exceptions.HTTPError as e:
         # Log the actual error on the server

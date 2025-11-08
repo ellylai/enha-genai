@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import PlaylistInput from "./components/PlaylistInput";
 import BubbleCanvas from "./components/BubbleCanvas";
 import CoverGallery from "./components/CoverGallery";
-import VibeControls from "./components/VibeControls"; // --- ADDED ---
+import VibeControls from "./components/VibeControls";
 
 const PLACEHOLDER_IMAGE =
   "data:image/svg+xml;base64," +
@@ -11,10 +11,10 @@ const PLACEHOLDER_IMAGE =
   );
 
 /**
- * --- MODIFIED ---
  * Converts the vibe JSON from the API into the
  * array of objects used by the BubbleCanvas.
- * Now includes "category" for two-way binding.
+ * This now ONLY processes categories with weights (mood, colors, objects).
+ * 'style', 'lighting', and 'time' are handled in VibeControls.
  */
 const convertVibeToBubbleConcepts = (vibe) => {
   if (!vibe) return [];
@@ -30,15 +30,16 @@ const convertVibeToBubbleConcepts = (vibe) => {
         } else if (typeof weight === "string" && weight.includes('/')) {
           try {
             const parts = weight.split('/');
-            numericWeight = (parseFloat(parts[0]) / parseFloat(parts[1])) * 1.5;
+            // Convert "4/5" to 0.8
+            numericWeight = parseFloat(parts[0]) / parseFloat(parts[1]);
           } catch (e) { /* ignore */ }
         }
         
         concepts.push({
-          id: `${category}-${label.replace(/\s+/g, "-")}-${idCounter++}`, // More unique ID
-          category, // --- ADDED ---
+          id: `${category}-${label.replace(/\s+/g, "-")}-${idCounter++}`,
+          category,
           label,
-          weight: Math.max(0.5, numericWeight),
+          weight: numericWeight, // Store the 0.0 - 1.0 value
         });
       });
     }
@@ -47,26 +48,8 @@ const convertVibeToBubbleConcepts = (vibe) => {
   addCategory('mood', vibe.mood);
   addCategory('colors', vibe.colors);
   addCategory('objects', vibe.objects);
-
-  const addSimpleItem = (category, item, isList) => {
-    // Non-list items (like style) aren't bubbles
-    if (isList) {
-       concepts.push({ 
-         id: `${category}-${item.replace(/\s+/g, "-")}-${idCounter++}`, 
-         category, 
-         label: item, 
-         weight: 1.0 
-       });
-    }
-  };
-
-  // 'style' is not a bubble, it's handled by VibeControls
-  if (vibe.lighting) {
-    vibe.lighting.forEach(label => addSimpleItem('lighting', label, true));
-  }
-  if (vibe.time_of_day) {
-    vibe.time_of_day.forEach(label => addSimpleItem('time_of_day', label, true));
-  }
+  
+  // 'style', 'lighting', and 'time_of_day' are no longer processed here.
   
   return concepts;
 };
@@ -74,8 +57,11 @@ const convertVibeToBubbleConcepts = (vibe) => {
 
 function App() {
   const [playlistLink, setPlaylistLink] = useState("");
+  // This state holds the master JSON from/to the API
   const [vibeData, setVibeData] = useState(null);
+  // This state powers the BubbleCanvas UI
   const [bubbleConcepts, setBubbleConcepts] = useState([]);
+  
   const [covers, setCovers] = useState([]);
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
@@ -86,8 +72,10 @@ function App() {
     [bubbleConcepts],
   );
 
-  // --- NEW HANDLER ---
-  // Finds the bubble by ID and updates its weight in both states
+  /**
+   * (Req #Bubble Click)
+   * Finds the bubble by ID and updates its weight in both states
+   */
   const handleWeightChange = (bubbleId, weight) => {
     let bubbleToUpdate = null;
 
@@ -112,12 +100,18 @@ function App() {
     }
   };
 
-  // --- NEW HANDLER (Req #1) ---
+  /**
+   * (Req #1)
+   * Handles user input for the 'style' text field
+   */
   const handleStyleChange = (newStyle) => {
     setVibeData(prev => ({ ...prev, style: newStyle }));
   };
 
-  // --- NEW HANDLER (Req #2) ---
+  /**
+   * (Req #2)
+   * Handles deleting a bubble from the canvas
+   */
   const handleDeleteBubble = (bubbleId) => {
     const bubbleToDelete = bubbleConcepts.find(b => b.id === bubbleId);
     if (!bubbleToDelete) return;
@@ -131,12 +125,8 @@ function App() {
       const category = bubbleToDelete.category;
 
       if (newVibe[category]) {
-        // Handle list categories (lighting, time_of_day)
-        if (Array.isArray(newVibe[category])) {
-          newVibe[category] = newVibe[category].filter(l => l !== bubbleToDelete.label);
-        }
-        // Handle object categories (mood, colors, objects)
-        else if (typeof newVibe[category] === 'object') {
+        // This handles object categories (mood, colors, objects)
+        if (typeof newVibe[category] === 'object' && !Array.isArray(newVibe[category])) {
           const newCategory = { ...newVibe[category] };
           delete newCategory[bubbleToDelete.label];
           newVibe[category] = newCategory;
@@ -146,7 +136,10 @@ function App() {
     });
   };
 
-  // --- NEW HANDLER (Req #3) ---
+  /**
+   * (Req #3)
+   * Handles editing a bubble's label
+   */
   const handleLabelChange = (bubbleId, newLabel) => {
     const bubbleToEdit = bubbleConcepts.find(b => b.id === bubbleId);
     if (!bubbleToEdit || bubbleToEdit.label === newLabel) return;
@@ -164,12 +157,8 @@ function App() {
       const category = bubbleToEdit.category;
 
       if (newVibe[category]) {
-        // Handle list categories
-        if (Array.isArray(newVibe[category])) {
-          newVibe[category] = newVibe[category].map(l => l === oldLabel ? newLabel : l);
-        }
-        // Handle object categories
-        else if (typeof newVibe[category] === 'object') {
+        // This handles object categories (mood, colors, objects)
+        if (typeof newVibe[category] === 'object' && !Array.isArray(newVibe[category])) {
           const newCategory = { ...newVibe[category] };
           const weight = newCategory[oldLabel];
           delete newCategory[oldLabel];
@@ -181,7 +170,10 @@ function App() {
     });
   };
 
-  // --- NEW HANDLER (Req #4) ---
+  /**
+   * (Req #4)
+   * Handles adding a new bubble from the VibeControls form
+   */
   const handleAddNewBubble = ({ category, label, weight }) => {
     // 1. Add to JSON state
     setVibeData(prevVibe => ({
@@ -204,6 +196,34 @@ function App() {
     ]);
   };
 
+  /**
+   * (Req #Last)
+   * Handles adding a new tag (lighting, time)
+   */
+  const handleAddTag = (category, tagLabel) => {
+    setVibeData(prevVibe => {
+      const currentTags = prevVibe[category] || [];
+      if (currentTags.includes(tagLabel)) return prevVibe; // Avoid duplicates
+      return {
+        ...prevVibe,
+        [category]: [...currentTags, tagLabel]
+      };
+    });
+  };
+
+  /**
+   * (Req #Last)
+   * Handles deleting a tag (lighting, time)
+   */
+  const handleDeleteTag = (category, tagLabel) => {
+    setVibeData(prevVibe => {
+      const currentTags = prevVibe[category] || [];
+      return {
+        ...prevVibe,
+        [category]: currentTags.filter(tag => tag !== tagLabel)
+      };
+    });
+  };
 
   // --- STEP 1: Get Vibe JSON from Backend ---
   const handleGetVibes = async () => {
@@ -272,6 +292,8 @@ function App() {
           return {
             id: `cover-${index + 1}`,
             imageUrl: imageSrc,
+            // Title is used for alt text and download filename
+            title: `Generated-Cover-${index + 1}`, 
             prompt: `Vibe based on ${Object.keys(vibeData.mood || {}).join(', ')}`,
           };
         });
@@ -292,7 +314,7 @@ function App() {
     try {
       const link = document.createElement("a");
       link.href = cover.imageUrl || PLACEHOLDER_IMAGE;
-      link.download = `${cover.id}.png`;
+      link.download = `${cover.title.replace(/\s+/g, '-')}.png`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -322,17 +344,18 @@ function App() {
           errorMessage={errorMessage}
         />
         
-        {/* --- ADDED VibeControls --- */}
         {vibeData && (
           <VibeControls 
             vibeData={vibeData}
             onStyleChange={handleStyleChange}
             onAddNewBubble={handleAddNewBubble}
+            onAddTag={handleAddTag} 
+            onDeleteTag={handleDeleteTag}
           />
         )}
 
         <BubbleCanvas 
-          bubbleConcepts={bubbleConcepts} // Pass full concept objects
+          bubbleConcepts={bubbleConcepts}
           onWeightChange={handleWeightChange}
           onLabelChange={handleLabelChange}
           onDeleteBubble={handleDeleteBubble}
