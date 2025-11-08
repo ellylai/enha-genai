@@ -186,7 +186,7 @@ def generate_image(vibe_prompt: str, n_images=3):
     Returns a string that can be used directly in <img src="">.
     It handles both Base64 and URL responses.
     """
-    # return get_dummy_images()
+    return get_dummy_images()
     print(f"--- Calling OpenRouter (Nano Banana) with prompt: {vibe_prompt[:50]}...")
 
     openrouter_headers = {
