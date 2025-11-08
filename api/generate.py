@@ -183,7 +183,7 @@ def generate_image(vibe_prompt: str):
     Returns a string that can be used directly in <img src="">.
     It handles both Base64 and URL responses.
     """
-    # return get_dummy_image()
+    return get_dummy_image()
     print(f"--- Calling OpenRouter (Nano Banana) with prompt: {vibe_prompt[:50]}...")
 
     openrouter_headers = {
@@ -261,7 +261,6 @@ def get_dummy_image():
         dummy_base64_image = base64.b64encode(image_data).decode("utf-8")
     print(dummy_base64_image[:100])
     return dummy_base64_image
-
 
 def extract_playlist_id(url):
     """Extracts the playlist ID from a Spotify URL."""
