@@ -180,13 +180,13 @@ def get_imagegen_prompt(user_prompt_2: dict) -> str:
     return final_prompt_text.strip()
 
 
-def generate_image(vibe_prompt: str):
+def generate_image(vibe_prompt: str, n_images=3):
     """
     Calls OpenRouter (Nano Banana / Gemini 2.5) to generate an image.
     Returns a string that can be used directly in <img src="">.
     It handles both Base64 and URL responses.
     """
-    return get_dummy_image()
+    # return get_dummy_images()
     print(f"--- Calling OpenRouter (Nano Banana) with prompt: {vibe_prompt[:50]}...")
 
     openrouter_headers = {
@@ -199,7 +199,7 @@ def generate_image(vibe_prompt: str):
     payload = {
         "model": "google/gemini-2.5-flash-image",
         "messages": [{"role": "user", "content": vibe_prompt}],
-        "generationConfig": {"responseModalities": ["IMAGE"]},
+        "generationConfig": {"responseModalities": ["IMAGE"], "numOutputs": n_images},
     }
 
     try:
@@ -208,62 +208,67 @@ def generate_image(vibe_prompt: str):
         )
         response.raise_for_status()
         result = response.json()
+        images_out = []
+        for choice in result.get("choices", []):
+            message = choice.get("message", {})
+            images = message.get("images", [])
 
-        choice = result.get("choices", [{}])[0]
-        message = choice.get("message", {})
-        images = message.get("images", [])
+            for img in images:
 
-        if not images:
-            print("--- [WARN] No images found in response, returning dummy image.")
-            return get_dummy_image()
+                # --- Check for Base64 or URL ---
+                if "b64_json" in img:
+                    b64_data = img["b64_json"]
+                    return f"data:image/png;base64,{b64_data}"
 
-        first_image = images[0]
+                elif "image_url" in img:
+                    img_url = img["image_url"]
+                    # image_url can be a dict with 'url' or 'b64'
+                    if isinstance(img_url, dict):
+                        if "b64" in img_url:
+                            print("returned b64")
+                            image_data = img_url["b64"]
+                        elif "url" in img_url:
+                            print("returned url")
+                            image_data = img_url["url"]
+                        # Detect if it's a base64 or a URL
+                        print(image_data[:100])
+                        if image_data.startswith("http"):
+                            pass
+                        elif image_data.startswith("data:image"):
+                            image_data = image_data.split(",", 1)[-1]
+                        else:
+                            image_data = f"data:image/png;base64,{image_data}"
+                    else:
+                        image_data = img_url
+                    images_out.append(image_data)
 
-        # --- Check for Base64 or URL ---
-        if "b64_json" in first_image:
-            b64_data = first_image["b64_json"]
-            return f"data:image/png;base64,{b64_data}"
-
-        elif "image_url" in first_image:
-            img_url = first_image["image_url"]
-            # image_url can be a dict with 'url' or 'b64'
-            if isinstance(img_url, dict):
-                if "b64" in img_url:
-                    print("returned b64")
-                    image_data = img_url["b64"]
-                elif "url" in img_url:
-                    print("returned url")
-                    image_data = img_url["url"]
-                # Detect if it's a base64 or a URL
-                print(image_data[:100])
-                if image_data.startswith("http"):
-                    pass
-                elif image_data.startswith("data:image"):
-                    image_data = image_data.split(",", 1)[-1]
-                else:
-                    image_data = f"data:image/png;base64,{image_data}"
-                return image_data
-            else:
-                return img_url
-
-        else:
-            print("--- [WARN] No valid image data found, returning dummy image.")
-            return get_dummy_image()
+        if not images_out:
+            print("--- [WARN] No valid image data found, returning dummy images.")
+            return get_dummy_images()
 
     except Exception as e:
         print(f"--- [ERROR] Image generation failed: {e}")
-        return get_dummy_image()
+        return get_dummy_images()
+    
+    images_return = images_out[:n_images]
+    print("--- [DEBUG]")
+    for image in images_return:
+        print(image[:100])
+    return images_return
 
 
-def get_dummy_image():
-    """Returns a Base64-encoded dummy image for fallback purposes."""
+def get_dummy_images():
+    """Returns 3 Base64-encoded dummy images (dummy1.png, dummy2.png, dummy3.png)."""
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    image_path = os.path.join(script_dir, "dummy.png")
-    with open(image_path, "rb") as image_file:
-        image_data = image_file.read()
-        dummy_base64_image = base64.b64encode(image_data).decode("utf-8")
-    print(dummy_base64_image[:100])
-    return dummy_base64_image
+    dummy_images = []
+
+    for i in range(1, 4):
+        image_path = os.path.join(script_dir, f"dummy{i}.png")
+        with open(image_path, "rb") as image_file:
+            image_data = image_file.read()
+            dummy_base64_image = base64.b64encode(image_data).decode("utf-8")
+            dummy_images.append(dummy_base64_image)
+    return dummy_images
 
 
 def extract_playlist_id(url):
@@ -311,7 +316,7 @@ def handler():
 
             imagegen_prompt = get_imagegen_prompt(updated_vibe_prompt)
             image_data = generate_image(imagegen_prompt)
-            return jsonify({"base64Image": image_data})
+            return [jsonify({"base64Image": img}) for img in image_data]
 
     except requests.exceptions.HTTPError as e:
         # Log the actual error on the server
