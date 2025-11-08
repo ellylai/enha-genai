@@ -1,15 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import PlaylistInput from "./components/PlaylistInput";
 import BubbleCanvas from "./components/BubbleCanvas";
 import CoverGallery from "./components/CoverGallery";
-
-const INITIAL_BUBBLES = [
-  { id: "genre", label: "moody alt pop", weight: 1.0 },
-  { id: "mood", label: "late-night neon", weight: 0.9 },
-  { id: "texture", label: "gritty synthwave", weight: 0.8 },
-  { id: "tempo", label: "slow burn", weight: 0.7 },
-  { id: "emotion", label: "longing", weight: 0.9 },
-];
 
 const PLACEHOLDER_IMAGE =
   "data:image/svg+xml;base64," +
@@ -17,51 +9,116 @@ const PLACEHOLDER_IMAGE =
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><defs><linearGradient id="a" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#c41e3a"/><stop offset="100%" stop-color="#8b0000"/></linearGradient></defs><rect width="512" height="512" fill="#1a1a1a"/><circle cx="256" cy="256" r="200" fill="url(#a)" opacity="0.75"/><text x="50%" y="50%" font-family="Bebas Neue, Arial" font-size="64" text-anchor="middle" fill="#e0e0e0" letter-spacing="10" transform="translate(0 20)">COVER</text></svg>`,
   );
 
+/**
+ * Converts the vibe JSON from the API into the
+ * array of objects used by the BubbleCanvas.
+ */
+const convertVibeToBubbleConcepts = (vibe) => {
+  if (!vibe) return [];
+  const concepts = [];
+  let idCounter = 0;
+
+  // Helper to add categories that have weights
+  const addCategory = (category, items) => {
+    if (items) {
+      Object.entries(items).forEach(([label, weight]) => {
+        // Ensure weight is a number, handling "5/5" strings or number formats
+        let numericWeight = 1.0;
+        if (typeof weight === "number") {
+          numericWeight = weight;
+        } else if (typeof weight === "string" && weight.includes('/')) {
+          try {
+            const parts = weight.split('/');
+            numericWeight = (parseFloat(parts[0]) / parseFloat(parts[1])) * 1.5; // Scale to 0-1.5 range
+          } catch (e) { /* ignore */ }
+        }
+        
+        concepts.push({
+          id: `${category}-${idCounter++}`,
+          label,
+          weight: Math.max(0.5, numericWeight), // Give it a min weight
+        });
+      });
+    }
+  };
+
+  addCategory('mood', vibe.mood);
+  addCategory('colors', vibe.colors);
+  addCategory('objects', vibe.objects);
+
+  // Helper for non-weighted items
+  const addSimpleItem = (category, item) => {
+     concepts.push({ id: `${category}-${idCounter++}`, label: item, weight: 1.0 });
+  };
+
+  if (vibe.style) {
+    addSimpleItem('style', vibe.style);
+  }
+  if (vibe.lighting) {
+    vibe.lighting.forEach(label => addSimpleItem('lighting', label));
+  }
+  if (vibe.time_of_day) {
+    vibe.time_of_day.forEach(label => addSimpleItem('time', label));
+  }
+  
+  return concepts;
+};
+
+
 function App() {
   const [playlistLink, setPlaylistLink] = useState("");
-  const [bubbleConcepts, setBubbleConcepts] = useState(INITIAL_BUBBLES);
+  // This state holds the JSON from/to the API
+  const [vibeData, setVibeData] = useState(null);
+  // This state powers the BubbleCanvas UI
+  const [bubbleConcepts, setBubbleConcepts] = useState([]);
+  
   const [covers, setCovers] = useState([]);
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  const conceptOverrides = useMemo(
-    () => bubbleConcepts.map(({ label, weight }) => ({ label, weight })),
+  // Memoized tuple conversion for the BubbleCanvas prop
+  const bubbleTuples = useMemo(
+    () => bubbleConcepts.map(({ label, weight }) => [label, weight]),
     [bubbleConcepts],
   );
 
-  const bubbleTuples = useMemo(
-    () => conceptOverrides.map(({ label, weight }) => [label, weight]),
-    [conceptOverrides],
-  );
-
-  const conceptOverridesJSON = useMemo(
-    () => JSON.stringify(conceptOverrides, null, 2),
-    [conceptOverrides],
-  );
-
-  const conceptOverridesRef = useRef(conceptOverrides);
-  const conceptOverridesJsonRef = useRef(conceptOverridesJSON);
-
-  useEffect(() => {
-    conceptOverridesRef.current = conceptOverrides;
-    conceptOverridesJsonRef.current = conceptOverridesJSON;
-  }, [conceptOverrides, conceptOverridesJSON]);
-
   const totalWeight = useMemo(
-    () => conceptOverrides.reduce((acc, item) => acc + item.weight, 0),
-    [conceptOverrides],
+    () => bubbleConcepts.reduce((acc, item) => acc + item.weight, 0),
+    [bubbleConcepts],
   );
 
   const handleAdjustBubble = (label, weight) => {
+    // 1. Update the bubbleConcepts state for the UI
     setBubbleConcepts((previous) =>
       previous.map((bubble) =>
         bubble.label === label ? { ...bubble, weight } : bubble,
       ),
     );
+
+    // 2. Update the master vibeData JSON for the next API call
+    setVibeData(prevVibe => {
+      if (!prevVibe) return null;
+      
+      // Create a deep copy to avoid mutating state
+      const newVibe = JSON.parse(JSON.stringify(prevVibe));
+      
+      // Find where this label lives (mood, color, object) and update its weight
+      // Note: We only update the properties that have weights in the JSON.
+      if (newVibe.mood && newVibe.mood[label] !== undefined) {
+        newVibe.mood[label] = weight;
+      } else if (newVibe.colors && newVibe.colors[label] !== undefined) {
+        newVibe.colors[label] = weight;
+      } else if (newVibe.objects && newVibe.objects[label] !== undefined) {
+        newVibe.objects[label] = weight;
+      }
+      
+      return newVibe;
+    });
   };
 
-  const handlePlaylistSubmit = async () => {
+  // --- STEP 1: Get Vibe JSON from Backend ---
+  const handleGetVibes = async () => {
     if (!playlistLink.trim()) {
       setErrorMessage("Please paste a valid Spotify playlist link.");
       return;
@@ -71,6 +128,8 @@ function App() {
     setStatusMessage("Analyzing playlist to extract moods and aesthetics…");
     setErrorMessage("");
     setCovers([]);
+    setVibeData(null);
+    setBubbleConcepts([]);
 
     try {
       const response = await fetch("http://127.0.0.1:5000/api/generate", {
@@ -78,52 +137,80 @@ function App() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          playlistLink,
-          conceptOverrides: conceptOverridesRef.current,
-        }),
+        body: JSON.stringify({ playlistLink }),
       });
 
-      console.log("Response data:", response); // Debug log
-
-      // Parse response
       const data = await response.json();
 
-      if (response.ok && data.base64Image) {
-        // Handle different base64 formats (from first file's logic)
-        let imageSrc = data.base64Image;
-        
-        // If it's already a data URL, use it directly
-        if (imageSrc.startsWith('data:image')) {
-          imageSrc = imageSrc;
-        } 
-        // If it's raw base64, prepend the data URL prefix
-        else if (!imageSrc.startsWith('http')) {
-          imageSrc = `data:image/png;base64,${imageSrc}`;
-        }
-        // If it's a URL, use it directly (keep as is)
+      if (response.ok && data.vibePrompt) {
+        setVibeData(data.vibePrompt);
+        setBubbleConcepts(convertVibeToBubbleConcepts(data.vibePrompt));
+        setStatusMessage("Vibes analyzed. Tweak the bubbles and hit Generate.");
+      } else {
+        throw new Error(data.error || "Failed to analyze playlist");
+      }
+    } catch (error) {
+      console.error("Fetch error (Step 1):", error);
+      if (error.message.includes("fetch")) {
+        setErrorMessage("Server not reachable. Is Flask running on port 5000?");
+      } else {
+        setErrorMessage(error.message || "Could not analyze playlist.");
+      }
+      setStatusMessage("");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-        // Generate 3 covers with the same image (can be modified later for multiple images)
-        const generatedCovers = Array.from({ length: 3 }, (_, index) => ({
-          id: `cover-${index + 1}`,
-          imageUrl: imageSrc,
-          prompt: `Blend of ${conceptOverridesRef.current
-            .map((item) => item.label)
-            .join(", ")}`,
-        }));
+  // --- STEP 2: Send Updated JSON to Generate Images ---
+  const handleGenerateImages = async () => {
+    if (!vibeData) {
+      setErrorMessage("Please analyze a playlist first.");
+      return;
+    }
+
+    setIsLoading(true);
+    setStatusMessage("Generating your AI covers...");
+    setErrorMessage("");
+    setCovers([]);
+
+    try {
+      const response = await fetch("http://127.0.0.1:5000/api/generate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ updatedVibePrompt: vibeData }),
+      });
+
+      const data = await response.json();
+
+      // Expect 'base64Images' (plural array)
+      if (response.ok && data.base64Images && data.base64Images.length > 0) {
+        
+        const generatedCovers = data.base64Images.map((base64Img, index) => {
+          let imageSrc = base64Img;
+          
+          // Prepend the data URL prefix if it's not already there
+          if (!imageSrc.startsWith('data:image') && !imageSrc.startsWith('http')) {
+            imageSrc = `data:image/png;base64,${imageSrc}`;
+          }
+          
+          return {
+            id: `cover-${index + 1}`,
+            imageUrl: imageSrc,
+            prompt: `Vibe based on ${Object.keys(vibeData.mood || {}).join(', ')}`,
+          };
+        });
 
         setCovers(generatedCovers);
         setStatusMessage("Tap a cover to download it or tweak the bubbles and regenerate.");
       } else {
-        throw new Error(data.error || "Failed to generate image");
+        throw new Error(data.error || "Failed to generate images.");
       }
     } catch (error) {
-      console.error("Fetch error:", error);
-      if (error.message.includes("fetch")) {
-        setErrorMessage("Server not reachable. Is Flask running on port 5000?");
-      } else {
-        setErrorMessage(error.message || "Could not generate cover art.");
-      }
+      console.error("Fetch error (Step 2):", error);
+      setErrorMessage(error.message || "Could not generate cover art.");
       setStatusMessage("");
     } finally {
       setIsLoading(false);
@@ -158,13 +245,27 @@ function App() {
         <PlaylistInput
           value={playlistLink}
           onChange={setPlaylistLink}
-          onSubmit={handlePlaylistSubmit}
-          isLoading={isLoading}
-          statusMessage={statusMessage || `Concept weight total: ${totalWeight.toFixed(2)}`}
+          onSubmit={handleGetVibes} // Changed from handlePlaylistSubmit
+          isLoading={isLoading && !vibeData} // Only show "Analyzing" on first step
+          statusMessage={statusMessage || (bubbleTuples.length > 0 ? `Concept weight total: ${totalWeight.toFixed(2)}` : "")}
           errorMessage={errorMessage}
         />
 
         <BubbleCanvas conceptTuples={bubbleTuples} onAdjustBubble={handleAdjustBubble} />
+
+        {/* --- New Generate Button --- */}
+        {/* Only show this button after vibes are loaded and not currently loading */}
+        {vibeData && (
+          <div className="flex justify-center -mt-4">
+            <button
+              onClick={handleGenerateImages}
+              disabled={isLoading}
+              className="w-full rounded-2xl bg-primary px-8 py-4 font-semibold uppercase tracking-wide text-light shadow-glow transition hover:bg-primary-dark focus:outline-none focus:ring-4 focus:ring-primary/40 disabled:cursor-not-allowed disabled:bg-primary/40 md:w-auto"
+            >
+              {isLoading ? "Generating..." : "Generate Covers"}
+            </button>
+          </div>
+        )}
 
         <CoverGallery covers={covers} onDownloadCover={handleDownloadCover} />
       </div>
