@@ -14,7 +14,6 @@ OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
 
 # --- API Endpoints ---
 GEMINI_API_URL = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key={GOOGLE_API_KEY}"
-IMAGEN_API_URL = f"https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key={GOOGLE_API_KEY}"
 SPOTIFY_TOKEN_URL = "https://accounts.spotify.com/api/token"
 SPOTIFY_PLAYLIST_API_BASE = "https://api.spotify.com/v1/playlists/"
 OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
@@ -92,7 +91,7 @@ def get_playlist_vibes(track_list_string):
         "contents": [{"parts": [{"text": track_list_string}]}],
         "systemInstruction": {"parts": [{"text": system_prompt_1}]},
         "generationConfig": {
-            "responseMimeType": "application/json",  # <-- Request JSON output
+            "responseMimeType": "application/json",
         },
     }
 
@@ -169,53 +168,87 @@ def get_playlist_vibes(track_list_string):
 
 def generate_image(vibe_prompt):
     """
-    Calls OpenRouter (Nano Banana) to generate an image.
+    Calls OpenRouter (Nano Banana / Gemini 2.5) to generate an image.
+    Returns a string that can be used directly in <img src="">.
+    It handles both Base64 and URL responses.
     """
+    # return get_dummy_image()
     print(f"--- Calling OpenRouter (Nano Banana) with prompt: {vibe_prompt[:50]}...")
 
-    # --- OpenRouter Headers ---
     openrouter_headers = {
         "Authorization": f"Bearer {OPENROUTER_API_KEY}",
         "Content-Type": "application/json",
-        "HTTP-Referer": "http://localhost:5000",  # Can be any URL
-        "X-Title": "AI Playlist Cover Gen",  # App name
+        "HTTP-Referer": "http://localhost:5000",
+        "X-Title": "AI Playlist Cover Gen",
     }
 
-    # This model uses a special payload structure on OpenRouter
     payload = {
-        "model": "google/gemini-2.5-flash-image",  # Nano Banana
+        "model": "google/gemini-2.5-flash-image",
         "messages": [{"role": "user", "content": vibe_prompt}],
-        "generationConfig": {
-            "responseModalities": ["IMAGE"]  # Pass this config for this model
-        },
+        "generationConfig": {"responseModalities": ["IMAGE"]},
     }
 
-    response = requests.post(
-        OPENROUTER_API_URL, headers=openrouter_headers, json=payload
-    )
-    response.raise_for_status()
-    result = response.json()
+    try:
+        response = requests.post(
+            OPENROUTER_API_URL, headers=openrouter_headers, json=payload, timeout=45
+        )
+        response.raise_for_status()
+        result = response.json()
 
-    # The response structure is different. The image is in the 'content' list.
-    parts = result.get("choices", [{}])[0].get("message", {}).get("content", [])
+        choice = result.get("choices", [{}])[0]
+        message = choice.get("message", {})
+        images = message.get("images", [])
 
-    base64_image = None
-    for part in parts:
-        if "inlineData" in part:
-            base64_image = part["inlineData"].get("data")
-            break  # Found the image
+        if not images:
+            print("--- [WARN] No images found in response, returning dummy image.")
+            return get_dummy_image()
 
-    if not base64_image:
-        raise Exception("AI could not generate an image (OpenRouter/Nano Banana).")
+        first_image = images[0]
 
-    return base64_image
+        # --- Check for Base64 or URL ---
+        if "b64_json" in first_image:
+            b64_data = first_image["b64_json"]
+            return f"data:image/png;base64,{b64_data}"
 
-    # BEFORE having access to API, RETURN A DUMMY IMAGE
+        elif "image_url" in first_image:
+            img_url = first_image["image_url"]
+            # image_url can be a dict with 'url' or 'b64'
+            if isinstance(img_url, dict):
+                if "b64" in img_url:
+                    print("returned b64")
+                    image_data = img_url["b64"]
+                elif "url" in img_url:
+                    print("returned url")
+                    image_data = img_url["url"]
+                # Detect if it's a base64 or a URL
+                print(image_data[:100])
+                if image_data.startswith("http"):
+                    pass
+                elif image_data.startswith("data:image"):
+                    image_data = image_data.split(",", 1)[-1]
+                else:
+                    image_data = f"data:image/png;base64,{image_data}"
+                return image_data
+            else:
+                return img_url
+
+        else:
+            print("--- [WARN] No valid image data found, returning dummy image.")
+            return get_dummy_image()
+
+    except Exception as e:
+        print(f"--- [ERROR] Image generation failed: {e}")
+        return get_dummy_image()
+
+
+def get_dummy_image():
+    """Returns a Base64-encoded dummy image for fallback purposes."""
     script_dir = os.path.dirname(os.path.abspath(__file__))
     image_path = os.path.join(script_dir, "dummy.png")
     with open(image_path, "rb") as image_file:
         image_data = image_file.read()
         dummy_base64_image = base64.b64encode(image_data).decode("utf-8")
+    print(dummy_base64_image[:100])
     return dummy_base64_image
 
 
@@ -231,7 +264,9 @@ def extract_playlist_id(url):
 # Vercel will route requests to /api/generate to this function
 @app.route("/api/generate", methods=["POST"])
 def handler():
-    if not all([OPENROUTER_API_KEY, SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET]):
+    if not all(
+        [OPENROUTER_API_KEY, GOOGLE_API_KEY, SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET]
+    ):
         return jsonify({"error": "Server is missing API key configuration."}), 500
 
     try:
@@ -248,9 +283,8 @@ def handler():
         token = get_spotify_token()
         details = get_playlist_details(playlist_id, token)
         vibe_prompt = get_playlist_vibes(details)
-        base64_image = generate_image(vibe_prompt)
-
-        return jsonify({"base64Image": base64_image})
+        image_data = generate_image(vibe_prompt)
+        return jsonify({"base64Image": image_data})
 
     except requests.exceptions.HTTPError as e:
         # Log the actual error on the server
