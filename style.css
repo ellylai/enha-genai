@@ -1,0 +1,20 @@
+/* Simple keyframe animation for the loader */
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.loader {
+    animation: spin 1s linear infinite;
+    border-width: 4px; /* Make the loader thicker */
+}
+
+/* Custom font */
+body {
+    font-family: 'Inter', sans-serif;
+}
+
+/* Ensure html and body take full height for center alignment */
+html, body {
+    height: 100%;
+    margin: 0;
+}
