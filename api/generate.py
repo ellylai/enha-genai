@@ -69,23 +69,12 @@ def get_playlist_details(playlist_id, token):
     return content
 
 
-def get_playlist_vibes(track_list_string):
+def get_playlist_vibes(track_list_string: str) -> dict:
     """
     Calls the Gemini API twice to analyze vibes (as JSON) and then generate a final image prompt.
     """
 
     # --- First Call: Analyze Vibes (Optimized for JSON) ---
-    # system_prompt_1 = """
-    #     You are a playlist vibe analyzer. A user has provided playlist details.
-    #     Analyze its core 'vibe' and return a JSON object with the following keys:
-    #     - "light_or_dark": "dark" or "light"
-    #     - "time_of_day": e.g., "midnight", "golden hour", "late afternoon", "sunrise"
-    #     - "objects": a list of 3-4 specific, evocative objects (e.g., ["a neon sign", "a cracked mirror", "a single rose"])
-    #     - "colors": a list of 3-4 coordinating colors (e.g., ["deep indigo", "electric pink", "gunmetal grey"])
-    #     - "mood": a concise 2-5 word mood description (e.g., "melancholic urban solitude", "energetic summer joy")
-
-    #     Return ONLY the valid JSON object and nothing else.
-    #     """
     system_prompt_1 = """
         You are a playlist vibe analyzer. A user has provided playlist details. 
         Analyze its core 'vibe' and return a JSON object with the following structure:
@@ -138,18 +127,20 @@ def get_playlist_vibes(track_list_string):
             .get("parts", [{}])[0]
             .get("text", "{}")
         )
-        return text_1
+        return json.loads(text_1)
 
     except (json.JSONDecodeError, AttributeError, KeyError) as e:
         print(f"JSON parsing failed: {e}")
         raise Exception("AI vibe analysis returned unparsable data.")
 
 
-def get_imagegen_prompt(user_prompt_2):
+def get_imagegen_prompt(user_prompt_2: dict) -> str:
     # with open("prompts.json", "r") as f:
     #     prompts_file = json.load(f)
     #     user_prompt_2 = json.dumps(prompts_file["prompt4"])
     #     print(f"USER_PROMPT_2 \n{user_prompt_2}")
+
+    user_prompt_2 = json.dumps(user_prompt_2)
 
     system_instruction_2 = """
         You are an expert prompt engineer for an AI image generator. 
@@ -186,7 +177,7 @@ def get_imagegen_prompt(user_prompt_2):
     return final_prompt_text.strip()
 
 
-def generate_image(vibe_prompt):
+def generate_image(vibe_prompt: str):
     """
     Calls OpenRouter (Nano Banana / Gemini 2.5) to generate an image.
     Returns a string that can be used directly in <img src="">.
