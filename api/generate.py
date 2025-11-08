@@ -304,19 +304,23 @@ def handler():
             token = get_spotify_token()
             details = get_playlist_details(playlist_id, token)
             naive_vibe_prompt = get_playlist_vibes(details)
+            
+            print(f"--- [DEBUG] naiveVibePrompt: \n{naive_vibe_prompt}")
 
             # send naive_vibe_prompt to the frontend so the user can update it
             return jsonify({"vibePrompt": naive_vibe_prompt})
 
         # send it back to backend for generation
         elif "updatedVibePrompt" in data:
+            print("--- [DEBUG] Received updatedVibePrompt", flush=True)
             updated_vibe_prompt = data.get("updatedVibePrompt")
             if not updated_vibe_prompt:
                 return jsonify({"error": "No updatedVibePrompt provided."}), 400
-
+            print(f"--- [DEBUG] updatedVibePrompt: \n{updated_vibe_prompt}")
             imagegen_prompt = get_imagegen_prompt(updated_vibe_prompt)
-            image_data = generate_image(imagegen_prompt)
-            return [jsonify({"base64Image": img}) for img in image_data]
+            image_data = generate_image(imagegen_prompt) # This returns a list of base64 strings
+            print(f"--- [DEBUG] Returning {len(image_data)} images", flush=True)
+            return jsonify({"base64Images": image_data})
 
     except requests.exceptions.HTTPError as e:
         # Log the actual error on the server

@@ -203,7 +203,7 @@ function BubbleCanvas({ conceptTuples, onAdjustBubble }) {
       </header>
       <div
         ref={containerRef}
-        className="relative mx-auto h-[420px] max-w-4xl overflow-hidden rounded-3xl bg-gradient-to-br from-primary/15 via-transparent to-primary/5"
+        className="relative mx-auto h-[900px] max-w-6xl overflow-hidden rounded-3xl bg-gradient-to-br from-primary/15 via-transparent to-primary/5"
       >
         {nodes.map((node) => (
           <button
