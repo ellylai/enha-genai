@@ -38,6 +38,9 @@ function Bubble({
   const [editValue, setEditValue] = useState(node.label);
 
   const handleWeightClick = () => {
+    // Prevent weight change if we are in edit mode or hovering over controls
+    if (isEditing) return;
+
     const newWeight =
       node.weight + WEIGHT_STEP > MAX_WEIGHT
         ? MIN_WEIGHT
@@ -67,12 +70,15 @@ function Bubble({
 
   // Prevent simulation from running while editing
   useEffect(() => {
-    node.vx = 0;
-    node.vy = 0;
+    if (isEditing) {
+      node.vx = 0;
+      node.vy = 0;
+    }
   }, [isEditing, node]);
 
   return (
-    <div
+    <button // <-- This is a button
+      type="button"
       className="focus-ring group absolute flex transform-gpu flex-col items-center justify-center rounded-full border-2 border-primary/60 bg-primary/20 text-center text-text-light shadow-lg transition-transform duration-200"
       style={{
         width: node.radius * 2,
@@ -81,6 +87,7 @@ function Bubble({
         top: node.y - node.radius,
         zIndex: isHovered || isEditing ? 10 : 1,
       }}
+      onClick={handleWeightClick} // <-- Click handler is now on the whole bubble
       onMouseEnter={() => !isEditing && setIsHovered(true)}
       onMouseLeave={() => !isEditing && setIsHovered(false)}
     >
@@ -94,14 +101,14 @@ function Bubble({
             className="w-full rounded-lg border border-primary bg-[#111] p-1 text-center text-sm"
             autoFocus
             onBlur={handleEditSubmit}
+            onClick={(e) => e.stopPropagation()} // Stop click from bubbling to button
           />
         </form>
       ) : (
         <>
           {/* --- Standard Display --- */}
           <span
-            className="px-6 text-lg font-medium capitalize tracking-wide cursor-pointer"
-            onClick={handleWeightClick} // Click text to change weight
+            className="px-6 text-lg font-medium capitalize tracking-wide pointer-events-none" // <-- No click handler, pointer-events-none
           >
             {node.label}
           </span>
@@ -114,14 +121,14 @@ function Bubble({
             <div className="absolute -bottom-4 flex gap-2">
               <button
                 type="button"
-                onClick={handleEditClick}
+                onClick={handleEditClick} // This will stop propagation
                 className="rounded-full bg-surface px-3 py-1 text-xs text-text-light transition hover:bg-text-light hover:text-bg"
               >
                 Edit
               </button>
               <button
                 type="button"
-                onClick={handleDeleteClick}
+                onClick={handleDeleteClick} // This will stop propagation
                 className="rounded-full bg-surface px-3 py-1 text-xs text-primary transition hover:bg-primary hover:text-bg"
               >
                 Delete
@@ -130,7 +137,7 @@ function Bubble({
           )}
         </>
       )}
-    </div>
+    </button>
   );
 }
 
