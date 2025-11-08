@@ -1,6 +1,6 @@
 *.pyc
 pycache/
-.env
+*.env
 *.env
 */.env
 venv/

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import PlaylistInput from "./components/PlaylistInput";
 import BubbleCanvas from "./components/BubbleCanvas";
 import CoverGallery from "./components/CoverGallery";
@@ -25,26 +25,41 @@ function App() {
   const [errorMessage, setErrorMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  const totalWeight = useMemo(
-    () => bubbleConcepts.reduce((acc, bubble) => acc + bubble.weight, 0),
+  const conceptOverrides = useMemo(
+    () => bubbleConcepts.map(({ label, weight }) => ({ label, weight })),
     [bubbleConcepts],
   );
 
-  const handleAdjustBubble = (id, weight) => {
+  const bubbleTuples = useMemo(
+    () => conceptOverrides.map(({ label, weight }) => [label, weight]),
+    [conceptOverrides],
+  );
+
+  const conceptOverridesJSON = useMemo(
+    () => JSON.stringify(conceptOverrides, null, 2),
+    [conceptOverrides],
+  );
+
+  const conceptOverridesRef = useRef(conceptOverrides);
+  const conceptOverridesJsonRef = useRef(conceptOverridesJSON);
+
+  useEffect(() => {
+    conceptOverridesRef.current = conceptOverrides;
+    conceptOverridesJsonRef.current = conceptOverridesJSON;
+  }, [conceptOverrides, conceptOverridesJSON]);
+
+  const totalWeight = useMemo(
+    () => conceptOverrides.reduce((acc, item) => acc + item.weight, 0),
+    [conceptOverrides],
+  );
+
+  const handleAdjustBubble = (label, weight) => {
     setBubbleConcepts((previous) =>
       previous.map((bubble) =>
-        bubble.id === id ? { ...bubble, weight } : bubble,
+        bubble.label === label ? { ...bubble, weight } : bubble,
       ),
     );
   };
-
-  const hydrateBubbleConcepts = (seed = 1) =>
-    INITIAL_BUBBLES.map((bubble, index) => ({
-      ...bubble,
-      weight: parseFloat(
-        (0.8 + ((seed + index) % 3) * 0.15 + Math.random() * 0.1).toFixed(2),
-      ),
-    }));
 
   const handlePlaylistSubmit = async () => {
     if (!playlistLink.trim()) {
@@ -58,16 +73,15 @@ function App() {
     setCovers([]);
 
     try {
-      // Hydrate bubble concepts with random weights
-      setBubbleConcepts(hydrateBubbleConcepts(playlistLink.length));
-
-      // Fetch from Flask backend with proper error handling
       const response = await fetch("http://127.0.0.1:5000/api/generate", {
         method: "POST",
-        headers: { 
-          "Content-Type": "application/json" 
+        headers: {
+          "Content-Type": "application/json",
         },
-        body: JSON.stringify({ playlistLink: playlistLink }),
+        body: JSON.stringify({
+          playlistLink,
+          conceptOverrides: conceptOverridesRef.current,
+        }),
       });
 
       console.log("Response data:", response); // Debug log
@@ -93,8 +107,8 @@ function App() {
         const generatedCovers = Array.from({ length: 3 }, (_, index) => ({
           id: `cover-${index + 1}`,
           imageUrl: imageSrc,
-          prompt: `Blend of ${bubbleConcepts
-            .map((bubble) => bubble.label)
+          prompt: `Blend of ${conceptOverridesRef.current
+            .map((item) => item.label)
             .join(", ")}`,
         }));
 
@@ -150,7 +164,7 @@ function App() {
           errorMessage={errorMessage}
         />
 
-        <BubbleCanvas bubbles={bubbleConcepts} onAdjustBubble={handleAdjustBubble} />
+        <BubbleCanvas conceptTuples={bubbleTuples} onAdjustBubble={handleAdjustBubble} />
 
         <CoverGallery covers={covers} onDownloadCover={handleDownloadCover} />
       </div>
