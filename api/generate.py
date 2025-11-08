@@ -281,24 +281,33 @@ def handler():
 
     try:
         data = request.json
-        playlist_link = data.get("playlistLink")
-        if not playlist_link:
-            return jsonify({"error": "No playlistLink provided."}), 400
+        
+        if "playlistLink" in data:
+            playlist_link = data.get("playlistLink")
+            if not playlist_link:
+                return jsonify({"error": "No playlistLink provided."}), 400
 
-        playlist_id = extract_playlist_id(playlist_link)
-        if not playlist_id:
-            return jsonify({"error": "Invalid Spotify playlist link."}), 400
+            playlist_id = extract_playlist_id(playlist_link)
+            if not playlist_id:
+                return jsonify({"error": "Invalid Spotify playlist link."}), 400
 
-        # Full API Workflow
-        token = get_spotify_token()
-        details = get_playlist_details(playlist_id, token)
-        naive_vibe_prompt = get_playlist_vibes(details)
-        updated_vibe_prompt = naive_vibe_prompt
-        # NEED!!
-        # updated_vibe_prompt = get_user_update(naive_vibe_prompt)
-        imagegen_prompt = get_imagegen_prompt(updated_vibe_prompt)
-        image_data = generate_image(imagegen_prompt)
-        return jsonify({"base64Image": image_data})
+            # Full API Workflow
+            token = get_spotify_token()
+            details = get_playlist_details(playlist_id, token)
+            naive_vibe_prompt = get_playlist_vibes(details)
+            
+            # send naive_vibe_prompt to the frontend so the user can update it
+            return jsonify({"vibePrompt": naive_vibe_prompt})
+        
+        # send it back to backend for generation
+        elif "updatedVibePrompt" in data:
+            updated_vibe_prompt = data.get("updatedVibePrompt")
+            if not updated_vibe_prompt:
+                 return jsonify({"error": "No updatedVibePrompt provided."}), 400
+
+            imagegen_prompt = get_imagegen_prompt(updated_vibe_prompt)
+            image_data = generate_image(imagegen_prompt)
+            return jsonify({"base64Image": image_data})
 
     except requests.exceptions.HTTPError as e:
         # Log the actual error on the server
