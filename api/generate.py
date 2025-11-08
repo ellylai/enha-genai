@@ -10,12 +10,14 @@ import json
 GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY")
 SPOTIFY_CLIENT_ID = os.environ.get("SPOTIFY_CLIENT_ID")
 SPOTIFY_CLIENT_SECRET = os.environ.get("SPOTIFY_CLIENT_SECRET")
+OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
 
 # --- API Endpoints ---
 GEMINI_API_URL = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key={GOOGLE_API_KEY}"
 IMAGEN_API_URL = f"https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key={GOOGLE_API_KEY}"
 SPOTIFY_TOKEN_URL = "https://accounts.spotify.com/api/token"
 SPOTIFY_PLAYLIST_API_BASE = "https://api.spotify.com/v1/playlists/"
+OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 # --- Flask App Setup ---
 app = Flask(__name__)
@@ -166,18 +168,47 @@ def get_playlist_vibes(track_list_string):
 
 
 def generate_image(vibe_prompt):
-    """Calls the Imagen API to generate an image."""
-    # final_prompt = (
-    #     f"{vibe_prompt}, high-resolution, square album cover art, no text or words."
-    # )
-    # payload = {"instances": {"prompt": final_prompt}, "parameters": {"sampleCount": 1}}
-    # response = requests.post(IMAGEN_API_URL, json=payload)
-    # response.raise_for_status()
-    # result = response.json()
-    # base64_image = result.get("predictions", [{}])[0].get("bytesBase64Encoded")
-    # if not base64_image:
-    #     raise Exception("AI could not generate an image.")
-    # return base64_image
+    """
+    Calls OpenRouter (Nano Banana) to generate an image.
+    """
+    print(f"--- Calling OpenRouter (Nano Banana) with prompt: {vibe_prompt[:50]}...")
+
+    # --- OpenRouter Headers ---
+    openrouter_headers = {
+        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": "http://localhost:5000",  # Can be any URL
+        "X-Title": "AI Playlist Cover Gen",  # App name
+    }
+
+    # This model uses a special payload structure on OpenRouter
+    payload = {
+        "model": "google/gemini-2.5-flash-image",  # Nano Banana
+        "messages": [{"role": "user", "content": vibe_prompt}],
+        "generationConfig": {
+            "responseModalities": ["IMAGE"]  # Pass this config for this model
+        },
+    }
+
+    response = requests.post(
+        OPENROUTER_API_URL, headers=openrouter_headers, json=payload
+    )
+    response.raise_for_status()
+    result = response.json()
+
+    # The response structure is different. The image is in the 'content' list.
+    parts = result.get("choices", [{}])[0].get("message", {}).get("content", [])
+
+    base64_image = None
+    for part in parts:
+        if "inlineData" in part:
+            base64_image = part["inlineData"].get("data")
+            break  # Found the image
+
+    if not base64_image:
+        raise Exception("AI could not generate an image (OpenRouter/Nano Banana).")
+
+    return base64_image
 
     # BEFORE having access to API, RETURN A DUMMY IMAGE
     script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -200,7 +231,7 @@ def extract_playlist_id(url):
 # Vercel will route requests to /api/generate to this function
 @app.route("/api/generate", methods=["POST"])
 def handler():
-    if not all([GOOGLE_API_KEY, SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET]):
+    if not all([OPENROUTER_API_KEY, SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET]):
         return jsonify({"error": "Server is missing API key configuration."}), 500
 
     try:
