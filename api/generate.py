@@ -85,25 +85,25 @@ def get_playlist_vibes(track_list_string: str) -> dict:
             "lighting": ["<description>"],
             "time of day": ["<description>"],
             "mood": {
-                "<mood_1>": "<rating>/5",
-                "<mood_2>": "<rating>/5",
-                "<mood_3>": "<rating>/5"
+                "<mood_1>": <weight>,
+                "<mood_2>": <weight>,
+                "<mood_3>": <weight>
             },
             "colors": {
-                "<color_1>": "<rating>/5",
-                "<color_2>": "<rating>/5",
-                "<color_3>": "<rating>/5"
+                "<color_1>": <weight>,
+                "<color_2>": <weight>,
+                "<color_3>": <weight>
             },
             "objects": {
-                "<object_1>": "<rating>/5",
-                "<object_2>": "<rating>/5",
-                "<object_3>": "<rating>/5"
+                "<object_1>": <weight>,
+                "<object_2>": <weight>,
+                "<object_3>": <weight>
             },
             "style": "<description>"
         }
         
         - All keys are required.
-        - Ratings should be from 0/5 to 5/5, representing presence or importance.
+        - Weights should be from 0 to 1.0, representing presence or importance.
         - Provide 3 items each for "mood", "colors", and "objects". Each should be a short phrase or single word.
         - "lighting" and "time of day" should be lists containing a single or multiple phrases.
         - "style" should be a single descriptive string, such as "blurry film photo taken in passing".
@@ -265,6 +265,7 @@ def get_dummy_image():
     print(dummy_base64_image[:100])
     return dummy_base64_image
 
+
 def extract_playlist_id(url):
     """Extracts the playlist ID from a Spotify URL."""
     try:
@@ -284,7 +285,7 @@ def handler():
 
     try:
         data = request.json
-        
+
         if "playlistLink" in data:
             playlist_link = data.get("playlistLink")
             if not playlist_link:
@@ -298,15 +299,15 @@ def handler():
             token = get_spotify_token()
             details = get_playlist_details(playlist_id, token)
             naive_vibe_prompt = get_playlist_vibes(details)
-            
+
             # send naive_vibe_prompt to the frontend so the user can update it
             return jsonify({"vibePrompt": naive_vibe_prompt})
-        
+
         # send it back to backend for generation
         elif "updatedVibePrompt" in data:
             updated_vibe_prompt = data.get("updatedVibePrompt")
             if not updated_vibe_prompt:
-                 return jsonify({"error": "No updatedVibePrompt provided."}), 400
+                return jsonify({"error": "No updatedVibePrompt provided."}), 400
 
             imagegen_prompt = get_imagegen_prompt(updated_vibe_prompt)
             image_data = generate_image(imagegen_prompt)
