@@ -75,14 +75,46 @@ def get_playlist_vibes(track_list_string):
     """
 
     # --- First Call: Analyze Vibes (Optimized for JSON) ---
+    # system_prompt_1 = """
+    #     You are a playlist vibe analyzer. A user has provided playlist details.
+    #     Analyze its core 'vibe' and return a JSON object with the following keys:
+    #     - "light_or_dark": "dark" or "light"
+    #     - "time_of_day": e.g., "midnight", "golden hour", "late afternoon", "sunrise"
+    #     - "objects": a list of 3-4 specific, evocative objects (e.g., ["a neon sign", "a cracked mirror", "a single rose"])
+    #     - "colors": a list of 3-4 coordinating colors (e.g., ["deep indigo", "electric pink", "gunmetal grey"])
+    #     - "mood": a concise 2-5 word mood description (e.g., "melancholic urban solitude", "energetic summer joy")
+
+    #     Return ONLY the valid JSON object and nothing else.
+    #     """
     system_prompt_1 = """
         You are a playlist vibe analyzer. A user has provided playlist details. 
-        Analyze its core 'vibe' and return a JSON object with the following keys:
-        - "light_or_dark": "dark" or "light"
-        - "time_of_day": e.g., "midnight", "golden hour", "late afternoon", "sunrise"
-        - "objects": a list of 3-4 specific, evocative objects (e.g., ["a neon sign", "a cracked mirror", "a single rose"])
-        - "colors": a list of 3-4 coordinating colors (e.g., ["deep indigo", "electric pink", "gunmetal grey"])
-        - "mood": a concise 2-5 word mood description (e.g., "melancholic urban solitude", "energetic summer joy")
+        Analyze its core 'vibe' and return a JSON object with the following structure:
+        {
+            "lighting": ["<description>"],
+            "time of day": ["<description>"],
+            "mood": {
+                "<mood_1>": "<rating>/5",
+                "<mood_2>": "<rating>/5",
+                "<mood_3>": "<rating>/5"
+            },
+            "colors": {
+                "<color_1>": "<rating>/5",
+                "<color_2>": "<rating>/5",
+                "<color_3>": "<rating>/5"
+            },
+            "objects": {
+                "<object_1>": "<rating>/5",
+                "<object_2>": "<rating>/5",
+                "<object_3>": "<rating>/5"
+            },
+            "style": "<description>"
+        }
+        
+        - All keys are required.
+        - Ratings should be from 0/5 to 5/5, representing presence or importance.
+        - Provide 3 items each for "mood", "colors", and "objects". Each should be a short phrase or single word.
+        - "lighting" and "time of day" should be lists containing a single or multiple phrases.
+        - "style" should be a single descriptive string, such as "blurry film photo taken in passing".
 
         Return ONLY the valid JSON object and nothing else.
         """
@@ -106,36 +138,24 @@ def get_playlist_vibes(track_list_string):
             .get("parts", [{}])[0]
             .get("text", "{}")
         )
-        vibe_data = json.loads(text_1)
-
-        dark_light = vibe_data.get("light_or_dark", "neutral")
-        time_of_day = vibe_data.get("time_of_day", "anytime")
-        objects_list = vibe_data.get("objects", ["anything"])
-        colors_list = vibe_data.get("colors", ["any color"])
-        mood_desc = vibe_data.get("mood", "any mood")
-
-        objects = ", ".join(objects_list)
-        colors = ", ".join(colors_list)
+        return text_1
 
     except (json.JSONDecodeError, AttributeError, KeyError) as e:
         print(f"JSON parsing failed: {e}")
         raise Exception("AI vibe analysis returned unparsable data.")
 
-    user_prompt_2 = f"""
-        Here are the vibes to synthesize:
-        dark or light: {dark_light}
-        time of day: {time_of_day}
-        objects: {objects}
-        colors: {colors}
-        mood: {mood_desc}
-    """
-    print(f"USER_PROMPT_2 \n{user_prompt_2}")
+
+def get_imagegen_prompt(user_prompt_2):
+    # with open("prompts.json", "r") as f:
+    #     prompts_file = json.load(f)
+    #     user_prompt_2 = json.dumps(prompts_file["prompt4"])
+    #     print(f"USER_PROMPT_2 \n{user_prompt_2}")
 
     system_instruction_2 = """
         You are an expert prompt engineer for an AI image generator. 
-        Your job is to take a set of vibe descriptions and synthesize them into a single, powerful, and evocative image prompt.
+        Your job is to take a set of vibe descriptions with their scoring and synthesize them into a single, powerful, and evocative image prompt for a playlist cover.
         Focus on visual composition, style, and atmosphere. DO NOT just list the items.
-        Make it sound like a beautiful, artistic description.
+        Make it sound like a beautiful, artistic description for an ABSTRACT image.
         The output MUST be only the final prompt itself, with no preamble.
     """
 
@@ -282,8 +302,12 @@ def handler():
         # Full API Workflow
         token = get_spotify_token()
         details = get_playlist_details(playlist_id, token)
-        vibe_prompt = get_playlist_vibes(details)
-        image_data = generate_image(vibe_prompt)
+        naive_vibe_prompt = get_playlist_vibes(details)
+        updated_vibe_prompt = naive_vibe_prompt
+        # NEED!!
+        # updated_vibe_prompt = get_user_update(naive_vibe_prompt)
+        imagegen_prompt = get_imagegen_prompt(updated_vibe_prompt)
+        image_data = generate_image(imagegen_prompt)
         return jsonify({"base64Image": image_data})
 
     except requests.exceptions.HTTPError as e:

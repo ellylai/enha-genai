@@ -1,0 +1,88 @@
+{
+    "prompt1": 
+{
+    "lighting": ["semi dark"],
+    "time of day": ["late evening"],
+    "mood": {
+        "nostalgic": "5/5",
+        "warm": "3/5",
+        "happy": "2/5"
+    },
+    "colors": {
+        "red": "5/5",
+        "green": "2/5",
+        "white": "3/5"
+    },
+    "objects": {
+        "christmas tree": "2/5",
+        "fireplace": "5/5",
+        "snow": "0/5",
+        "lights": "5/5"
+    },
+    "style": "blurry film photograph taken in passing"
+},
+"prompt2": 
+{
+    "lighting": ["semi dark"],
+    "time of day": ["twilight", "post-dinner"],
+    "mood": {
+        "nostalgic": "5/5",
+        "warm": "3/5",
+        "cold": "3/5"
+    },
+    "colors": {
+        "brown": "2/5",
+        "green": "2/5",
+        "blue": "3/5"
+    },
+    "objects": {
+        "christmas tree": "2/5",
+        "snow": "3/5",
+        "sled": "2/5"
+    },
+    "style": "abstract romantic style watercolor"
+},
+"prompt3": 
+{
+    "lighting": ["bright", "golden"],
+    "time of day": ["brisk morning", "10AM"],
+    "mood": {
+        "nostalgic": "2/5",
+        "warm": "3/5",
+        "cold": "3/5"
+    },
+    "colors": {
+        "brown": "2/5",
+        "green": "2/5",
+        "blue": "3/5"
+    },
+    "objects": {
+        "christmas tree": "2/5",
+        "snow": "3/5",
+        "sled": "2/5"
+    },
+    "style": "abstract romantic style watercolor"
+},
+"prompt4": 
+{
+    "lighting": ["dark", "indigo"],
+    "time of day": ["late evening", "12AM"],
+    "mood": {
+        "cold": "3/5",
+        "success": "3/5",
+        "big city": "4/5",
+        "lonely": "3/5"
+    },
+    "colors": {
+        "indigo": "4/5",
+        "deep purple": "2/5",
+        "twilight blue": "3/5"
+    },
+    "objects": {
+        "cityscape": "4/5",
+        "lights": "5/5",
+        "wine glass": "1/5"
+    },
+    "style": "abstract romantic style watercolor"
+}
+}
