@@ -10,8 +10,6 @@ const PLACEHOLDER_IMAGE =
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><defs><linearGradient id="a" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#c41e3a"/><stop offset="100%" stop-color="#8b0000"/></linearGradient></defs><rect width="512" height="512" fill="#1a1a1a"/><circle cx="256" cy="256" r="200" fill="url(#a)" opacity="0.75"/><text x="50%" y="50%" font-family="Bebas Neue, Arial" font-size="64" text-anchor="middle" fill="#e0e0e0" letter-spacing="10" transform="translate(0 20)">COVER</text></svg>`,
   );
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || "http://127.0.0.1:5000";
-
 /**
  * Converts the vibe JSON from the API into the
  * array of objects used by the BubbleCanvas.
