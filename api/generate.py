@@ -6,6 +6,9 @@ from flask_cors import CORS
 import json
 from dotenv import load_dotenv
 
+app = Flask(__name__)
+CORS(app)
+
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
 # --- Environment Setup ---
@@ -279,7 +282,7 @@ def extract_playlist_id(url):
 # --- Main API Route ---
 # Vercel will route requests to /api/generate to this function
 @app.route("/api/generate", methods=["POST"])
-def handler():
+def generate():
     if not all(
         [OPENROUTER_API_KEY, GOOGLE_API_KEY, SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET]
     ):
@@ -337,5 +340,5 @@ def handler():
 
 
 # Vercel needs this to run the app
-if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+# if __name__ == "__main__":
+#     app.run(debug=True, port=5000)
